@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0"/>
+  <title>Mangal Burger 🍔</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *{font-family:'Poppins',sans-serif;}
+    body{background:#fff8f0;}
+    .grad{background:linear-gradient(135deg,#c2410c 0%,#ea580c 50%,#fb923c 100%);}
+    .card-shadow{box-shadow:0 4px 20px rgba(194,65,12,0.13);}
+    .cat-active{background:linear-gradient(135deg,#c2410c,#ea580c);color:white;}
+    .cat-inactive{background:white;color:#374151;}
+    .btn-primary{background:linear-gradient(135deg,#c2410c,#ea580c);}
+    .modal-overlay{background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);}
+    .modal-img-grad{background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,0.75) 100%);}
+    ::-webkit-scrollbar{display:none;}
+    .noscroll{-ms-overflow-style:none;scrollbar-width:none;}
+    @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes pop{from{transform:scale(0.94) translateY(8px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+    @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    @keyframes badgePop{0%{transform:scale(1)}50%{transform:scale(1.4)}100%{transform:scale(1)}}
+    .modal-sheet{animation:slideUp .33s cubic-bezier(0.34,1.56,0.64,1);}
+    .ov-anim{animation:fadeIn .2s ease;}
+    .card-anim{animation:pop .4s ease forwards;opacity:0;}
+    .skeleton{background:linear-gradient(90deg,#f3e8e0 25%,#fdf0e8 50%,#f3e8e0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;}
+    .badge-anim{animation:badgePop .25s ease;}
+    .product-card{transition:transform .2s ease;}
+    .product-card:hover{transform:translateY(-2px);}
+    .cart-item-enter{animation:pop .25s ease forwards;}
+    /* Status badge colors */
+    .status-yangi{background:#dcfce7;color:#166534;}
+    .status-tayyorlanmoqda{background:#fef9c3;color:#854d0e;}
+    .status-yetkazilmoqda{background:#dbeafe;color:#1e40af;}
+    .status-yetkazildi{background:#f0fdf4;color:#14532d;}
+    .status-bekor{background:#fee2e2;color:#991b1b;}
+  </style>
+</head>
+<body class="min-h-screen">
+<div class="max-w-sm mx-auto min-h-screen bg-orange-50 relative">
+
+  <!-- HEADER -->
+  <div class="grad px-5 pt-12 pb-8 rounded-b-[2.5rem]">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <p class="text-orange-100 text-sm font-medium">Tez yetkazib berish 🔥</p>
+        <h1 class="text-white text-2xl font-bold">Mangal Burger</h1>
+      </div>
+      <!-- CART BUTTON -->
+      <button onclick="openCart()" class="relative w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        <span id="cartBadge" class="absolute -top-1 -right-1 bg-white text-orange-600 text-xs rounded-full w-5 h-5 items-center justify-center font-bold hidden" style="font-size:10px;display:none;">0</span>
+      </button>
+    </div>
+    <!-- SEARCH -->
+    <div class="relative">
+      <div class="absolute left-4 top-1/2 -translate-y-1/2">
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+        </svg>
+      </div>
+      <input id="searchInput" type="text" placeholder="Taom qidiring..." class="w-full pl-12 pr-4 py-3.5 bg-white rounded-2xl text-sm text-gray-700 placeholder-gray-400 outline-none shadow-sm" oninput="filterProducts()"/>
+    </div>
+  </div>
+
+  <!-- CATEGORIES -->
+  <div class="px-5 mt-5 mb-4">
+    <div id="categories" class="flex gap-2 overflow-x-auto noscroll pb-1"></div>
+  </div>
+
+  <!-- PRODUCTS -->
+  <div class="px-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-gray-800 font-semibold text-base">Mashhur taomlar</h2>
+      <span id="productCount" class="text-orange-600 text-xs font-medium"></span>
+    </div>
+    <div id="productGrid" class="grid grid-cols-2 gap-3 pb-8"></div>
+  </div>
+</div>
+
+<!-- ═══ PRODUCT MODAL ═══ -->
+<div id="productModal" class="fixed inset-0 z-50 hidden">
+  <div class="modal-overlay ov-anim absolute inset-0" onclick="closeProductModal()"></div>
+  <div class="modal-sheet absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-sm bg-white rounded-t-[2.5rem] overflow-hidden" style="max-height:90vh">
+    <div class="relative h-60">
+      <img id="pmImg" src="" alt="" class="w-full h-full object-cover"/>
+      <div class="modal-img-grad absolute inset-0"></div>
+      <button onclick="closeProductModal()" class="absolute top-4 right-4 bg-white/90 rounded-full p-2 shadow">
+        <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+      <span id="pmCat" class="absolute top-4 left-4 bg-orange-500 text-white text-xs px-3 py-1 rounded-full font-medium"></span>
+    </div>
+    <div class="p-6 overflow-y-auto" style="max-height:calc(90vh - 240px)">
+      <div class="flex items-start justify-between mb-2">
+        <h3 id="pmTitle" class="text-xl font-bold text-gray-800 flex-1 pr-3"></h3>
+        <span id="pmPrice" class="text-xl font-bold text-orange-600 whitespace-nowrap"></span>
+      </div>
+      <p id="pmDesc" class="text-gray-500 text-sm leading-relaxed mb-5"></p>
+      <div class="flex items-center gap-4 mb-5">
+        <span class="text-gray-700 font-medium text-sm">Miqdor:</span>
+        <div class="flex items-center gap-3 bg-gray-100 rounded-2xl px-2 py-1">
+          <button onclick="pmQtyChange(-1)" class="w-8 h-8 flex items-center justify-center text-orange-600 font-bold text-lg">−</button>
+          <span id="pmQty" class="text-gray-800 font-semibold w-5 text-center">1</span>
+          <button onclick="pmQtyChange(1)" class="w-8 h-8 flex items-center justify-center text-orange-600 font-bold text-lg">+</button>
+        </div>
+      </div>
+      <button onclick="addFromModal()" class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-base shadow-lg shadow-orange-200 active:scale-95 transition-transform">
+        Savatga qo'shish 🛒
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CART MODAL ═══ -->
+<div id="cartModal" class="fixed inset-0 z-50 hidden">
+  <div class="modal-overlay ov-anim absolute inset-0" onclick="closeCart()"></div>
+  <div class="modal-sheet absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-sm bg-white rounded-t-[2.5rem] overflow-hidden" style="max-height:92vh">
+    <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-lg font-bold text-gray-800">🛒 Savatim</h2>
+      <button onclick="closeCart()" class="bg-gray-100 rounded-full p-2">
+        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="overflow-y-auto" style="max-height:calc(92vh - 220px)">
+      <div id="cartItems" class="px-5 py-3 space-y-3"></div>
+    </div>
+    <!-- Cart Footer -->
+    <div class="px-5 py-4 border-t border-gray-100 bg-white">
+      <div class="flex justify-between items-center mb-4">
+        <span class="text-gray-600 font-medium">Jami:</span>
+        <span id="cartTotal" class="text-xl font-bold text-orange-600"></span>
+      </div>
+      <button onclick="openOrderForm()" id="orderBtn" class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-base shadow-lg shadow-orange-200 active:scale-95 transition-transform">
+        Buyurtma berish →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ORDER FORM MODAL ═══ -->
+<div id="orderModal" class="fixed inset-0 z-[60] hidden">
+  <div class="modal-overlay ov-anim absolute inset-0" onclick="closeOrderModal()"></div>
+  <div class="modal-sheet absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-sm bg-white rounded-t-[2.5rem] overflow-hidden" style="max-height:85vh">
+    <div class="p-5 border-b border-gray-100">
+      <h2 class="text-lg font-bold text-gray-800">📋 Buyurtmani rasmiylashtirish</h2>
+    </div>
+    <div class="p-5 overflow-y-auto" style="max-height:calc(85vh - 80px)">
+      <!-- Summary -->
+      <div id="orderSummary" class="bg-orange-50 rounded-2xl p-4 mb-5 space-y-1"></div>
+      <!-- Form -->
+      <div class="space-y-4 mb-5">
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-1.5">Ismingiz *</label>
+          <input id="custName" type="text" placeholder="Ism Familiya" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors"/>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-1.5">Telefon raqam *</label>
+          <input id="custPhone" type="tel" placeholder="+998 90 000 00 00" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors"/>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-gray-700 block mb-1.5">Izoh (ixtiyoriy)</label>
+          <textarea id="custNote" placeholder="Qo'shimcha xohish..." rows="2" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors resize-none"></textarea>
+        </div>
+      </div>
+      <div class="flex justify-between items-center mb-4 bg-gray-50 rounded-2xl px-4 py-3">
+        <span class="text-gray-700 font-medium">To'lanadigan summa:</span>
+        <span id="orderTotal" class="text-lg font-bold text-orange-600"></span>
+      </div>
+      <button onclick="submitOrder()" id="submitBtn" class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-base shadow-lg shadow-orange-200 active:scale-95 transition-transform">
+        ✅ Buyurtmani tasdiqlash
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SUCCESS MODAL ═══ -->
+<div id="successModal" class="fixed inset-0 z-[70] hidden">
+  <div class="modal-overlay ov-anim absolute inset-0"></div>
+  <div class="modal-sheet absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-sm bg-white rounded-t-[2.5rem] p-8 text-center">
+    <div class="text-6xl mb-4">🎉</div>
+    <h2 class="text-xl font-bold text-gray-800 mb-2">Buyurtma qabul qilindi!</h2>
+    <p class="text-gray-500 text-sm mb-2">Buyurtma raqamingiz:</p>
+    <p id="orderNum" class="text-3xl font-bold text-orange-600 mb-4">#0</p>
+    <p class="text-gray-500 text-sm mb-6">Admin tez orada siz bilan bog'lanadi 📞</p>
+    <button onclick="closeSuccess()" class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-base">
+      Yaxshi, rahmat! 👍
+    </button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 opacity-0 pointer-events-none">
+  <div class="bg-orange-600 text-white px-5 py-3 rounded-2xl shadow-lg text-sm font-medium flex items-center gap-2">
+    <span>✅</span><span id="toastMsg">Qo'shildi!</span>
+  </div>
+</div>
+
+<script>
+// ─── SUPABASE CONFIG ───────────────────────────────
+const SUPABASE_URL      = 'https://YOUR_PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY_HERE';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─── STATE ─────────────────────────────────────────
+let allProducts = [], filteredProducts = [], activeCategory = 'Barchasi';
+let cart = [];
+let currentProduct = null, pmQty = 1;
+
+// ─── DEMO DATA ─────────────────────────────────────
+const demo = [
+  {id:1,title:'Klassik Burger',price:35000,description:'Mol go\'shti, salat, pomidor va maxsus sous bilan.',category:'Burgerlar',image_url:'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400',is_available:true},
+  {id:2,title:'Mangal Burger',price:45000,description:'Mangalda pishirilgan go\'sht, karamelized piyoz bilan.',category:'Burgerlar',image_url:'https://images.unsplash.com/photo-1550317138-10000687a72b?w=400',is_available:true},
+  {id:3,title:'Tovuq Burger',price:32000,description:'Qovurilgan tovuq, coleslaw va achchiq sous bilan.',category:'Burgerlar',image_url:'https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=400',is_available:true},
+  {id:4,title:'Kartoshka fri',price:15000,description:'Tuz va paprika bilan qovurilgan kartoshka.',category:'Garniturlar',image_url:'https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?w=400',is_available:true},
+  {id:5,title:'Kola',price:10000,description:'Sovutilgan Coca-Cola 0.5L.',category:'Ichimliklar',image_url:'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400',is_available:true},
+  {id:6,title:'Cheez Burger',price:38000,description:'Ikki qatlam pishloq va mol go\'shti.',category:'Burgerlar',image_url:'https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=400',is_available:true},
+];
+
+// ─── LOAD PRODUCTS ─────────────────────────────────
+async function loadProducts() {
+  showSkeletons();
+  try {
+    const { data, error } = await sb.from('menu').select('*').eq('is_available',true).order('created_at',{ascending:false});
+    if(error) throw error;
+    allProducts = data?.length ? data : demo;
+  } catch { allProducts = demo; }
+  filteredProducts = [...allProducts];
+  renderCategories();
+  renderProducts(filteredProducts);
+}
+
+function showSkeletons() {
+  document.getElementById('productGrid').innerHTML = Array(4).fill(0).map(()=>`
+    <div class="bg-white rounded-3xl overflow-hidden card-shadow">
+      <div class="skeleton h-36 w-full"></div>
+      <div class="p-3"><div class="skeleton h-4 w-3/4 rounded mb-2"></div><div class="skeleton h-3 w-1/2 rounded mb-3"></div><div class="skeleton h-8 w-full rounded-xl"></div></div>
+    </div>`).join('');
+}
+
+function renderCategories() {
+  const cats = ['Barchasi',...new Set(allProducts.map(p=>p.category))];
+  document.getElementById('categories').innerHTML = cats.map(c=>`
+    <button onclick="selectCategory('${c}')" class="whitespace-nowrap px-4 py-2 rounded-2xl text-sm font-medium transition-all duration-200 border border-transparent ${c===activeCategory?'cat-active shadow-md':'cat-inactive border-gray-100 shadow-sm'}">${c}</button>
+  `).join('');
+}
+
+function selectCategory(c) { activeCategory=c; renderCategories(); filterProducts(); }
+
+function filterProducts() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  filteredProducts = allProducts.filter(p=>
+    (activeCategory==='Barchasi'||p.category===activeCategory) &&
+    (p.title.toLowerCase().includes(q)||(p.description||'').toLowerCase().includes(q))
+  );
+  renderProducts(filteredProducts);
+}
+
+function renderProducts(products) {
+  document.getElementById('productCount').textContent = products.length+' ta taom';
+  if(!products.length){
+    document.getElementById('productGrid').innerHTML=`<div class="col-span-2 text-center py-16"><div class="text-5xl mb-3">🍔</div><p class="text-gray-500 font-medium">Taom topilmadi</p></div>`;
+    return;
+  }
+  document.getElementById('productGrid').innerHTML = products.map((p,i)=>`
+    <div class="product-card bg-white rounded-3xl overflow-hidden card-shadow cursor-pointer card-anim" style="animation-delay:${i*0.07}s" onclick="openProductModal(${p.id})">
+      <div class="relative">
+        <img src="${p.image_url||''}" alt="${p.title}" class="w-full h-36 object-cover" onerror="this.src='https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400'"/>
+        <span class="absolute top-2 left-2 bg-white/90 text-orange-700 text-xs px-2 py-0.5 rounded-full font-medium">${p.category}</span>
+      </div>
+      <div class="p-3">
+        <h3 class="text-gray-800 font-semibold text-sm leading-tight mb-1 truncate">${p.title}</h3>
+        <p class="text-gray-400 text-xs mb-2.5 truncate">${p.description||''}</p>
+        <div class="flex items-center justify-between">
+          <span class="text-orange-600 font-bold text-sm">${fmt(p.price)}</span>
+          <button onclick="event.stopPropagation();quickAdd(${p.id})" class="btn-primary w-8 h-8 rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-sm active:scale-90 transition-transform">+</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// ─── PRODUCT MODAL ─────────────────────────────────
+function openProductModal(id) {
+  currentProduct = allProducts.find(p=>p.id===id);
+  if(!currentProduct) return;
+  pmQty = 1;
+  document.getElementById('pmImg').src = currentProduct.image_url||'';
+  document.getElementById('pmTitle').textContent = currentProduct.title;
+  document.getElementById('pmPrice').textContent = fmt(currentProduct.price);
+  document.getElementById('pmDesc').textContent = currentProduct.description||'';
+  document.getElementById('pmCat').textContent = currentProduct.category;
+  document.getElementById('pmQty').textContent = 1;
+  document.getElementById('productModal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeProductModal() {
+  document.getElementById('productModal').classList.add('hidden');
+  document.body.style.overflow='';
+  currentProduct=null;
+}
+function pmQtyChange(d) {
+  pmQty = Math.max(1,pmQty+d);
+  document.getElementById('pmQty').textContent = pmQty;
+}
+function addFromModal() {
+  if(!currentProduct) return;
+  addToCart(currentProduct,pmQty);
+  closeProductModal();
+}
+function quickAdd(id) {
+  const p = allProducts.find(x=>x.id===id);
+  if(p) addToCart(p,1);
+}
+
+// ─── CART ──────────────────────────────────────────
+function addToCart(product,qty) {
+  const ex = cart.find(c=>c.id===product.id);
+  if(ex) ex.qty+=qty; else cart.push({...product,qty});
+  updateCartBadge();
+  showToast(product.title+" savatga qo'shildi!");
+}
+function removeFromCart(id) {
+  cart = cart.filter(c=>c.id!==id);
+  updateCartBadge();
+  renderCartItems();
+}
+function changeCartQty(id,d) {
+  const item = cart.find(c=>c.id===id);
+  if(!item) return;
+  item.qty = Math.max(1,item.qty+d);
+  updateCartBadge();
+  renderCartItems();
+}
+function updateCartBadge() {
+  const total = cart.reduce((s,c)=>s+c.qty,0);
+  const b = document.getElementById('cartBadge');
+  b.textContent = total;
+  b.style.display = total>0?'flex':'none';
+  if(total>0){b.classList.add('badge-anim');setTimeout(()=>b.classList.remove('badge-anim'),250);}
+}
+function cartTotal() { return cart.reduce((s,c)=>s+c.price*c.qty,0); }
+
+function openCart() {
+  if(!cart.length){showToast("Savat bo'sh 🛒");return;}
+  renderCartItems();
+  document.getElementById('cartModal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeCart() {
+  document.getElementById('cartModal').classList.add('hidden');
+  document.body.style.overflow='';
+}
+function renderCartItems() {
+  const container = document.getElementById('cartItems');
+  if(!cart.length){container.innerHTML=`<p class="text-center text-gray-400 py-8">Savat bo'sh</p>`;return;}
+  container.innerHTML = cart.map(item=>`
+    <div class="cart-item-enter flex items-center gap-3 bg-white rounded-2xl p-3 card-shadow">
+      <img src="${item.image_url||''}" class="w-14 h-14 rounded-xl object-cover flex-shrink-0" onerror="this.src='https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400'"/>
+      <div class="flex-1 min-w-0">
+        <p class="text-gray-800 font-medium text-sm truncate">${item.title}</p>
+        <p class="text-orange-600 font-bold text-sm">${fmt(item.price*item.qty)}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="changeCartQty(${item.id},-1)" class="w-7 h-7 bg-gray-100 rounded-xl flex items-center justify-center text-gray-600 font-bold">−</button>
+        <span class="text-gray-800 font-semibold text-sm w-4 text-center">${item.qty}</span>
+        <button onclick="changeCartQty(${item.id},1)" class="w-7 h-7 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 font-bold">+</button>
+        <button onclick="removeFromCart(${item.id})" class="w-7 h-7 bg-red-50 rounded-xl flex items-center justify-center ml-1">
+          <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+  document.getElementById('cartTotal').textContent = fmt(cartTotal());
+}
+
+// ─── ORDER FORM ────────────────────────────────────
+function openOrderForm() {
+  closeCart();
+  // Summary
+  const summary = cart.map(i=>`
+    <div class="flex justify-between text-sm">
+      <span class="text-gray-600">${i.title} × ${i.qty}</span>
+      <span class="font-medium text-gray-800">${fmt(i.price*i.qty)}</span>
+    </div>`).join('');
+  document.getElementById('orderSummary').innerHTML = summary;
+  document.getElementById('orderTotal').textContent = fmt(cartTotal());
+  document.getElementById('custName').value='';
+  document.getElementById('custPhone').value='';
+  document.getElementById('custNote').value='';
+  document.getElementById('orderModal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeOrderModal() {
+  document.getElementById('orderModal').classList.add('hidden');
+  document.body.style.overflow='';
+}
+
+// ─── SUBMIT ORDER ──────────────────────────────────
+async function submitOrder() {
+  const name  = document.getElementById('custName').value.trim();
+  const phone = document.getElementById('custPhone').value.trim();
+  const note  = document.getElementById('custNote').value.trim();
+
+  if(!name)  { showToast('❌ Ismingizni kiriting!'); return; }
+  if(!phone) { showToast('❌ Telefon raqamini kiriting!'); return; }
+  if(cart.length===0) { showToast('❌ Savat bo\'sh!'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.textContent = '⏳ Yuborilmoqda...';
+  btn.disabled = true;
+
+  try {
+    // 1. Orders jadvaliga yoz
+    const { data: order, error: orderErr } = await sb.from('orders').insert([{
+      customer_name:  name,
+      customer_phone: phone,
+      total_price:    cartTotal(),
+      note:           note||null,
+      status:         'yangi'
+    }]).select().single();
+
+    if(orderErr) throw orderErr;
+
+    // 2. Order items jadvaliga yoz
+    const items = cart.map(i=>({
+      order_id: order.id,
+      menu_id:  i.id,
+      title:    i.title,
+      price:    i.price,
+      quantity: i.qty
+    }));
+    const { error: itemsErr } = await sb.from('order_items').insert(items);
+    if(itemsErr) throw itemsErr;
+
+    // 3. Success
+    cart = [];
+    updateCartBadge();
+    closeOrderModal();
+    document.getElementById('orderNum').textContent = '#'+order.id;
+    document.getElementById('successModal').classList.remove('hidden');
+
+  } catch(err) {
+    console.error(err);
+    showToast('❌ Xato: '+err.message);
+  } finally {
+    btn.textContent = '✅ Buyurtmani tasdiqlash';
+    btn.disabled = false;
+  }
+}
+
+function closeSuccess() {
+  document.getElementById('successModal').classList.add('hidden');
+  document.body.style.overflow='';
+}
+
+// ─── HELPERS ───────────────────────────────────────
+function fmt(p) { return new Intl.NumberFormat('uz-UZ').format(p)+" so'm"; }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.style.opacity='1';
+  setTimeout(()=>{ t.style.opacity='0'; },2500);
+}
+
+loadProducts();
+</script>
+</body>
+</html>
