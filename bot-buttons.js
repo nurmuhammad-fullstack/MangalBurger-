@@ -12,7 +12,24 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-const WEBAPP_URL = process.env.WEBAPP_URL;
+function normalizeWebAppUrl(raw) {
+  if (!raw) return null;
+  let url = String(raw).trim();
+  if (!url) return null;
+  if (!/^https?:\/\//i.test(url)) {
+    const isLocalhost = /^(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(url);
+    url = `${isLocalhost ? 'http' : 'https'}://${url}`;
+  }
+  return url;
+}
+
+function inferWebAppUrl() {
+  const flyAppName = String(process.env.FLY_APP_NAME || '').trim();
+  if (flyAppName) return `https://${flyAppName}.fly.dev`;
+  return null;
+}
+
+const WEBAPP_URL = normalizeWebAppUrl(process.env.WEBAPP_URL) || inferWebAppUrl();
 const PORT = Number(process.env.PORT || 3000);
 const MENU_IMAGES_BUCKET = process.env.MENU_IMAGES_BUCKET || 'menu-images';
 
@@ -20,7 +37,8 @@ if (!BOT_TOKEN) throw new Error('BOT_TOKEN berilmagan');
 if (!ADMIN_ID) throw new Error('ADMIN_ID berilmagan');
 if (!SUPABASE_URL) throw new Error('SUPABASE_URL berilmagan');
 if (!SUPABASE_SERVICE_KEY) throw new Error('SUPABASE_SERVICE_KEY berilmagan');
-if (!WEBAPP_URL) throw new Error('WEBAPP_URL berilmagan');
+if (!WEBAPP_URL)
+  throw new Error('WEBAPP_URL berilmagan (Fly.io: fly secrets set WEBAPP_URL=https://<app>.fly.dev)');
 
 const orderApi = require('./api/order');
 const configApi = require('./api/config');
