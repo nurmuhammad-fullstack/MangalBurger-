@@ -116,6 +116,12 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // Avoid noisy console errors if someone opens the endpoint in the browser
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    sendJson(res, 200, { ok: true, message: 'Use POST to create an order' }, origin);
+    return;
+  }
+
   if (req.method !== 'POST') {
     sendJson(res, 405, { message: 'Method not allowed' }, origin);
     return;
