@@ -1,18 +1,12 @@
 {
   "name": "mangal-burger-bot",
-  "version": "2.0.0",
-  "description": "Mangal Burger — Telegram Admin Bot",
-  "main": "bot.js",
+  "version": "1.0.0",
+  "main": "bot-buttons.js",
   "scripts": {
-    "start": "node bot.js"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "start": "node bot-buttons.js",
+    "dev": "nodemon bot-buttons.js"
   },
   "dependencies": {
-    "telegraf": "^4.16.3",
-    "@supabase/supabase-js": "^2.39.0",
-    "axios": "^1.6.0",
-    "dotenv": "^16.0.0"
+    "dotenv": "^17.4.2"
   }
 }
