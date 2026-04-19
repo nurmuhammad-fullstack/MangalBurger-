@@ -78,6 +78,17 @@ function formatMoney(value) {
   return Number(value || 0).toLocaleString('uz-UZ');
 }
 
+function escapeMarkdown(text) {
+  return String(text ?? '').replace(/([_*`\\[])/g, '\\$1');
+}
+
+function formatPaymentType(value) {
+  const v = String(value || '').toLowerCase();
+  if (v === 'cash') return 'Naqd';
+  if (v === 'card') return 'Karta';
+  return value || '-';
+}
+
 function orderActionKeyboard(orderId) {
   return Markup.inlineKeyboard([
     [
@@ -126,6 +137,19 @@ async function getOrderItems(orderId) {
   return data || [];
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getOrderItemsWithRetry(orderId, attempts = 6, delayMs = 250) {
+  for (let i = 0; i < attempts; i++) {
+    const items = await getOrderItems(orderId);
+    if (items.length) return items;
+    await sleep(delayMs);
+  }
+  return getOrderItems(orderId);
+}
+
 function calculateTotalFromItems(items) {
   return (items || []).reduce((sum, item) => {
     return sum + Number(item.price || 0) * Number(item.quantity || 0);
@@ -145,22 +169,28 @@ async function buildOrderMessage(orderId) {
       return null;
     }
 
-    const items = await getOrderItems(orderId);
+    const items = await getOrderItemsWithRetry(orderId);
     const total = calculateTotalFromItems(items);
 
     const itemLines = items.length
       ? items.map(i =>
-          `• ${i.title} × ${i.quantity} = ${formatMoney(Number(i.price || 0) * Number(i.quantity || 0))} so'm`
+          `• ${escapeMarkdown(i.title)} × ${i.quantity} = ${formatMoney(Number(i.price || 0) * Number(i.quantity || 0))} so'm`
         ).join('\n')
       : '• Mahsulot yo‘q';
 
     const statusEmoji = STATUS_EMOJI[order.status] || '⚪';
+    const paymentType = formatPaymentType(order.payment_type);
+    const paymentStatus = order.payment_status ? String(order.payment_status) : null;
+    const tableNo = order.delivery_address ? escapeMarkdown(order.delivery_address) : null;
+    const note = order.note ? escapeMarkdown(order.note) : null;
 
     return (
       `🍔 *BUYURTMA #${order.id}*\n\n` +
-      `👤 Mijoz: *${order.customer_name || '-'}*\n` +
+      `👤 Mijoz: *${escapeMarkdown(order.customer_name || '-')}*\n` +
       `📞 Telefon: \`${order.customer_phone || '-'}\`\n` +
-      `${order.note ? `📝 Izoh: ${order.note}\n` : ''}` +
+      `${tableNo ? `🪑 Stol: *${tableNo}*\n` : ''}` +
+      `💳 To'lov: *${escapeMarkdown(paymentType)}*${paymentStatus ? ` (${escapeMarkdown(paymentStatus)})` : ''}\n` +
+      `${note ? `📝 Izoh: ${note}\n` : ''}` +
       `\n📋 *Buyurtma tarkibi:*\n${itemLines}\n\n` +
       `💰 *Jami: ${formatMoney(total)} so'm*\n` +
       `${statusEmoji} Status: *${order.status || 'yangi'}*\n` +
@@ -288,8 +318,8 @@ bot.action('btn_orders', adminOnly, async (ctx) => {
       const total = calculateTotalFromItems(items);
 
       lines.push(
-        `${STATUS_EMOJI[order.status] || '⚪'} *#${order.id}* — ${order.customer_name || '-'}\n` +
-        `📞 ${order.customer_phone || '-'}\n` +
+        `${STATUS_EMOJI[order.status] || '⚪'} *#${order.id}* — ${escapeMarkdown(order.customer_name || '-')}\n` +
+        `📞 ${escapeMarkdown(order.customer_phone || '-')}\n` +
         `💰 ${formatMoney(total)} so'm\n` +
         `🕐 ${new Date(order.created_at).toLocaleTimeString('uz-UZ')}`
       );
@@ -341,8 +371,8 @@ bot.action(/^btn_orders_(.+)$/, adminOnly, async (ctx) => {
       const total = calculateTotalFromItems(items);
 
       lines.push(
-        `${STATUS_EMOJI[order.status] || '⚪'} *#${order.id}* — ${order.customer_name || '-'}\n` +
-        `📞 ${order.customer_phone || '-'}\n` +
+        `${STATUS_EMOJI[order.status] || '⚪'} *#${order.id}* — ${escapeMarkdown(order.customer_name || '-')}\n` +
+        `📞 ${escapeMarkdown(order.customer_phone || '-')}\n` +
         `💰 ${formatMoney(total)} so'm`
       );
     }

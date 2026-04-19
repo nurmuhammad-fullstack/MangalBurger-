@@ -161,24 +161,41 @@
     <div class="p-5 border-b border-gray-100">
       <h2 class="text-lg font-bold text-gray-800">📋 Buyurtmani rasmiylashtirish</h2>
     </div>
-    <div class="p-5 overflow-y-auto" style="max-height:calc(85vh - 80px)">
-      <!-- Summary -->
-      <div id="orderSummary" class="bg-orange-50 rounded-2xl p-4 mb-5 space-y-1"></div>
-      <!-- Form -->
-      <div class="space-y-4 mb-5">
-        <div>
-          <label class="text-sm font-medium text-gray-700 block mb-1.5">Ismingiz *</label>
-          <input id="custName" type="text" placeholder="Ism Familiya" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors"/>
-        </div>
-        <div>
-          <label class="text-sm font-medium text-gray-700 block mb-1.5">Telefon raqam *</label>
-          <input id="custPhone" type="tel" placeholder="+998 90 000 00 00" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors"/>
-        </div>
-        <div>
-          <label class="text-sm font-medium text-gray-700 block mb-1.5">Izoh (ixtiyoriy)</label>
-          <textarea id="custNote" placeholder="Qo'shimcha xohish..." rows="2" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors resize-none"></textarea>
-        </div>
-      </div>
+	    <div class="p-5 overflow-y-auto" style="max-height:calc(85vh - 80px)">
+	      <!-- Summary -->
+	      <div id="orderSummary" class="bg-orange-50 rounded-2xl p-4 mb-5 space-y-1"></div>
+	      <!-- Form -->
+	      <div class="space-y-4 mb-5">
+	        <div>
+	          <label class="text-sm font-medium text-gray-700 block mb-1.5">Ismingiz *</label>
+	          <input id="custName" type="text" autocomplete="name" placeholder="Ism Familiya" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors"/>
+	          <p id="custNameErr" class="mt-1 text-xs text-red-600 hidden"></p>
+	        </div>
+	        <div>
+	          <label class="text-sm font-medium text-gray-700 block mb-1.5">Telefon raqam *</label>
+	          <input id="custPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+998 90 000 00 00" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors"/>
+	          <p id="custPhoneErr" class="mt-1 text-xs text-red-600 hidden"></p>
+	        </div>
+		        <div>
+		          <label class="text-sm font-medium text-gray-700 block mb-1.5">Stol raqami *</label>
+		          <input id="tableNo" type="text" inputmode="numeric" autocomplete="off" placeholder="Masalan: 12" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors"/>
+		          <p id="tableNoErr" class="mt-1 text-xs text-red-600 hidden"></p>
+		          <p class="mt-1 text-[11px] text-gray-400">QR kod stol ustida bo‘lsa, stol raqamini kiriting.</p>
+		        </div>
+	        <div>
+	          <label class="text-sm font-medium text-gray-700 block mb-1.5">To'lov turi</label>
+	          <div class="grid grid-cols-2 gap-2">
+	            <button type="button" id="payCashBtn" onclick="setPaymentType('cash')" class="px-4 py-3 rounded-2xl text-sm font-semibold border border-orange-200 bg-orange-50 text-orange-700 active:scale-95 transition-transform">💵 Naqd</button>
+	            <button type="button" id="payCardBtn" onclick="setPaymentType('card')" class="px-4 py-3 rounded-2xl text-sm font-semibold border border-gray-200 bg-white text-gray-700 active:scale-95 transition-transform">💳 Karta</button>
+	          </div>
+	          <input id="paymentType" type="hidden" value="cash"/>
+	        </div>
+	        <div>
+	          <label class="text-sm font-medium text-gray-700 block mb-1.5">Izoh (ixtiyoriy)</label>
+	          <textarea id="custNote" placeholder="Qo'shimcha xohish..." rows="2" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-sm outline-none focus:border-orange-400 transition-colors resize-none"></textarea>
+	          <p class="mt-1 text-[11px] text-gray-400">Masalan: achchiqroq qiling, mayonezsiz, qo‘shimcha sous…</p>
+	        </div>
+	      </div>
       <div class="flex justify-between items-center mb-4 bg-gray-50 rounded-2xl px-4 py-3">
         <span class="text-gray-700 font-medium">To'lanadigan summa:</span>
         <span id="orderTotal" class="text-lg font-bold text-orange-600"></span>
@@ -207,8 +224,8 @@
 
 <!-- TOAST -->
 <div id="toast" class="fixed top-6 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 opacity-0 pointer-events-none">
-  <div class="bg-orange-600 text-white px-5 py-3 rounded-2xl shadow-lg text-sm font-medium flex items-center gap-2">
-    <span>✅</span><span id="toastMsg">Qo'shildi!</span>
+  <div id="toastBox" class="bg-orange-600 text-white px-5 py-3 rounded-2xl shadow-lg text-sm font-medium flex items-center gap-2">
+    <span id="toastIcon">✅</span><span id="toastMsg">Qo'shildi!</span>
   </div>
 </div>
 
@@ -265,10 +282,45 @@ function hideConfigBanner() {
   if (wrapper) wrapper.classList.add('hidden');
 }
 
+let configTriedFromServer = false;
+async function ensureSupabaseConfig() {
+  const current = getClientConfig();
+  if (!isPlaceholderSupabaseConfig(current)) return true;
+
+  if (configTriedFromServer) return false;
+  configTriedFromServer = true;
+
+  try {
+    const res = await fetch('/api/config', { cache: 'no-store' });
+    if (!res.ok) return false;
+
+    const json = await res.json();
+    const supabaseUrl = String(json?.supabaseUrl || '').trim();
+    const supabaseAnonKey = String(json?.supabaseAnonKey || '').trim();
+    if (!supabaseUrl || !supabaseAnonKey) return false;
+
+    window.MANGAL_CONFIG = {
+      ...(window.MANGAL_CONFIG || {}),
+      SUPABASE_URL: supabaseUrl,
+      SUPABASE_ANON_KEY: supabaseAnonKey,
+    };
+
+    return !isPlaceholderSupabaseConfig(getClientConfig());
+  } catch {
+    return false;
+  }
+}
+
+function getOrderApiUrl() {
+  const cfg = window.MANGAL_CONFIG || window.MB_CONFIG || {};
+  return String(cfg.ORDER_API_URL || cfg.orderApiUrl || '/api/order');
+}
+
 // ─── STATE ─────────────────────────────────────────
 let allProducts = [], filteredProducts = [], activeCategory = 'Barchasi';
 let cart = [];
 let currentProduct = null, pmQty = 1;
+let paymentType = 'cash';
 
 // ─── DEMO DATA ─────────────────────────────────────
 const demo = [
@@ -288,7 +340,7 @@ async function loadProducts() {
   if (!client) {
     allProducts = demo;
     setConfigBanner(
-      "⚠️ Demo rejim: Supabase sozlanmagan. `config.js` faylida `SUPABASE_URL` va `SUPABASE_ANON_KEY` ni kiriting.",
+      "⚠️ Demo rejim: Supabase sozlanmagan. `config.js` (frontend) yoki Vercel env (`SUPABASE_URL`, `SUPABASE_ANON_KEY`) ni sozlang.",
       'warn'
     );
   } else {
@@ -458,17 +510,21 @@ function renderCartItems() {
 // ─── ORDER FORM ────────────────────────────────────
 function openOrderForm() {
   closeCart();
-  // Summary
-  const summary = cart.map(i=>`
-    <div class="flex justify-between text-sm">
-      <span class="text-gray-600">${i.title} × ${i.qty}</span>
-      <span class="font-medium text-gray-800">${fmt(i.price*i.qty)}</span>
-    </div>`).join('');
-  document.getElementById('orderSummary').innerHTML = summary;
+  clearOrderErrors();
+
+  document.getElementById('orderSummary').innerHTML = buildOrderSummaryHtml();
   document.getElementById('orderTotal').textContent = fmt(cartTotal());
-  document.getElementById('custName').value='';
-  document.getElementById('custPhone').value='';
-  document.getElementById('custNote').value='';
+
+  const saved = getSavedCustomerInfo();
+  const tgName = getTelegramUserName();
+
+  document.getElementById('custName').value = saved.name || tgName || '';
+  document.getElementById('custPhone').value = saved.phone || '';
+  const tableFromContext = getTableNumberFromContext();
+  document.getElementById('tableNo').value = saved.tableNo || (tableFromContext ? String(tableFromContext) : '');
+  document.getElementById('custNote').value = '';
+
+  setPaymentType(saved.paymentType || 'cash', { silent: true });
   document.getElementById('orderModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -477,62 +533,297 @@ function closeOrderModal() {
   document.body.style.overflow='';
 }
 
+function buildOrderSummaryHtml() {
+  const qtyTotal = cart.reduce((s, c) => s + Number(c.qty || 0), 0);
+  const lines = cart.map(i => `
+    <div class="flex items-start justify-between gap-3 text-sm">
+      <div class="min-w-0">
+        <p class="text-gray-800 font-semibold truncate">${i.title}</p>
+        <p class="text-gray-500 text-[11px]">${fmt(i.price)} × ${i.qty}</p>
+      </div>
+      <div class="font-bold text-gray-800 whitespace-nowrap">${fmt(i.price * i.qty)}</div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-gray-800 font-semibold">Buyurtma</p>
+      <p class="text-gray-500 text-xs">${qtyTotal} ta</p>
+    </div>
+    <div class="space-y-2">${lines}</div>
+    <div class="h-px bg-orange-100 my-3"></div>
+    <div class="flex items-center justify-between text-sm">
+      <span class="text-gray-600">Jami</span>
+      <span class="font-bold text-orange-700">${fmt(cartTotal())}</span>
+    </div>
+  `;
+}
+
+function getTelegramUserName() {
+  const tg = window.Telegram?.WebApp;
+  const u = tg?.initDataUnsafe?.user;
+  if (!u) return '';
+  return [u.first_name, u.last_name].filter(Boolean).join(' ').trim();
+}
+
+function getTableNumberFromContext() {
+  const params = new URLSearchParams(window.location.search || '');
+  const hashParams = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+
+  const fromUrl =
+    params.get('table') ||
+    params.get('t') ||
+    params.get('tableNo') ||
+    params.get('table_number') ||
+    hashParams.get('table') ||
+    hashParams.get('t') ||
+    hashParams.get('tableNo') ||
+    hashParams.get('table_number');
+
+  const fromTg = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+
+  const raw = fromUrl || fromTg || '';
+  const digits = String(raw).replace(/\\D/g, '');
+  if (!digits) return null;
+
+  const n = Number(digits);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.trunc(n);
+  if (i < 1 || i > 999) return null;
+  return i;
+}
+
+const ORDER_STORAGE = {
+  name: 'mb_customer_name',
+  phone: 'mb_customer_phone',
+  tableNo: 'mb_table_no',
+  paymentType: 'mb_payment_type',
+};
+
+function getSavedCustomerInfo() {
+  try {
+    return {
+      name: (localStorage.getItem(ORDER_STORAGE.name) || '').trim(),
+      phone: (localStorage.getItem(ORDER_STORAGE.phone) || '').trim(),
+      tableNo: (localStorage.getItem(ORDER_STORAGE.tableNo) || '').trim(),
+      paymentType: (localStorage.getItem(ORDER_STORAGE.paymentType) || '').trim(),
+    };
+  } catch {
+    return { name: '', phone: '', tableNo: '', paymentType: '' };
+  }
+}
+
+function saveCustomerInfo({ name, phone, tableNo, paymentType }) {
+  try {
+    localStorage.setItem(ORDER_STORAGE.name, name || '');
+    localStorage.setItem(ORDER_STORAGE.phone, phone || '');
+    localStorage.setItem(ORDER_STORAGE.tableNo, tableNo || '');
+    localStorage.setItem(ORDER_STORAGE.paymentType, paymentType || 'cash');
+  } catch {}
+}
+
+const PAY_ACTIVE =
+  'px-4 py-3 rounded-2xl text-sm font-semibold border border-orange-200 bg-orange-50 text-orange-700 active:scale-95 transition-transform';
+const PAY_INACTIVE =
+  'px-4 py-3 rounded-2xl text-sm font-semibold border border-gray-200 bg-white text-gray-700 active:scale-95 transition-transform';
+
+function setPaymentType(type, opts = {}) {
+  paymentType = type === 'card' ? 'card' : 'cash';
+
+  const cashBtn = document.getElementById('payCashBtn');
+  const cardBtn = document.getElementById('payCardBtn');
+  const hidden = document.getElementById('paymentType');
+
+  if (hidden) hidden.value = paymentType;
+  if (cashBtn) cashBtn.className = paymentType === 'cash' ? PAY_ACTIVE : PAY_INACTIVE;
+  if (cardBtn) cardBtn.className = paymentType === 'card' ? PAY_ACTIVE : PAY_INACTIVE;
+
+  if (!opts.silent) {
+    const saved = getSavedCustomerInfo();
+    saveCustomerInfo({ ...saved, paymentType });
+  }
+}
+
+function setFieldError(inputId, message) {
+  const input = document.getElementById(inputId);
+  const err = document.getElementById(`${inputId}Err`);
+  if (input) input.classList.add('border-red-300');
+  if (err) {
+    err.textContent = message;
+    err.classList.remove('hidden');
+  }
+}
+
+function clearFieldError(inputId) {
+  const input = document.getElementById(inputId);
+  const err = document.getElementById(`${inputId}Err`);
+  if (input) input.classList.remove('border-red-300');
+  if (err) {
+    err.textContent = '';
+    err.classList.add('hidden');
+  }
+}
+
+function clearOrderErrors() {
+  clearFieldError('custName');
+  clearFieldError('custPhone');
+  clearFieldError('tableNo');
+}
+
+function normalizePhoneClient(raw) {
+  const digits = String(raw || '').replace(/\\D/g, '');
+  if (!digits) return null;
+  if (digits.length === 12 && digits.startsWith('998')) return `+${digits}`;
+  if (digits.length === 9) return `+998${digits}`;
+  return null;
+}
+
+function formatPhoneUz(normalized) {
+  const digits = String(normalized || '').replace(/\\D/g, '');
+  if (digits.length !== 12 || !digits.startsWith('998')) return String(normalized || '');
+  const d = digits.slice(3);
+  return `+998 ${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 7)} ${d.slice(7, 9)}`;
+}
+
+function normalizeTableNoClient(raw) {
+  const digits = String(raw || '').replace(/\\D/g, '');
+  if (!digits) return null;
+  const n = Number(digits);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.trunc(n);
+  if (i < 1 || i > 999) return null;
+  return i;
+}
+
+function setupOrderFormEvents() {
+  const nameInput = document.getElementById('custName');
+  const phoneInput = document.getElementById('custPhone');
+  const tableInput = document.getElementById('tableNo');
+
+  if (nameInput) nameInput.addEventListener('input', () => clearFieldError('custName'));
+  if (phoneInput) phoneInput.addEventListener('input', () => clearFieldError('custPhone'));
+  if (tableInput) {
+    tableInput.addEventListener('input', () => {
+      clearFieldError('tableNo');
+      const digitsOnly = tableInput.value.replace(/\\D/g, '');
+      if (tableInput.value !== digitsOnly) tableInput.value = digitsOnly;
+    });
+  }
+
+  if (phoneInput) {
+    phoneInput.addEventListener('blur', () => {
+      const normalized = normalizePhoneClient(phoneInput.value);
+      if (normalized) phoneInput.value = formatPhoneUz(normalized);
+    });
+  }
+}
+
 // ─── SUBMIT ORDER ──────────────────────────────────
 async function submitOrder() {
+  clearOrderErrors();
+
+  await ensureSupabaseConfig();
   const client = getSupabaseClient();
   if (!client) {
-    showToast('❌ Supabase sozlanmagan (demo rejim).');
+    showToast('Supabase sozlanmagan (demo rejim).', 'warn');
     return;
   }
 
-  const name  = document.getElementById('custName').value.trim();
-  const phone = document.getElementById('custPhone').value.trim();
-  const note  = document.getElementById('custNote').value.trim();
+  const nameInput = document.getElementById('custName');
+  const phoneInput = document.getElementById('custPhone');
+  const tableInput = document.getElementById('tableNo');
+  const noteInput = document.getElementById('custNote');
 
-  if(!name)  { showToast('❌ Ismingizni kiriting!'); return; }
-  if(!phone) { showToast('❌ Telefon raqamini kiriting!'); return; }
-  if(cart.length===0) { showToast('❌ Savat bo\'sh!'); return; }
+  const name = String(nameInput?.value || '').trim();
+  const phoneRaw = String(phoneInput?.value || '').trim();
+  const phoneNormalized = normalizePhoneClient(phoneRaw);
+  const tableNo = normalizeTableNoClient(String(tableInput?.value || '').trim());
+  const note = String(noteInput?.value || '').trim();
+
+  if (phoneNormalized && phoneInput) phoneInput.value = formatPhoneUz(phoneNormalized);
+
+  let hasError = false;
+  if (name.length < 2) { setFieldError('custName', 'Ismingizni kiriting'); hasError = true; }
+  if (name.length > 60) { setFieldError('custName', 'Ism 60 ta belgidan oshmasin'); hasError = true; }
+  if (!phoneNormalized) { setFieldError('custPhone', "Masalan: +998901234567"); hasError = true; }
+  if (!tableNo) { setFieldError('tableNo', 'Stol raqamini kiriting (1–999)'); hasError = true; }
+  if (note.length > 300) { showToast('Izoh 300 ta belgidan oshmasin', 'warn'); hasError = true; }
+  if (cart.length === 0) { showToast("Savat bo'sh 🛒", 'warn'); hasError = true; }
+  if (hasError) return;
 
   const btn = document.getElementById('submitBtn');
-  btn.textContent = '⏳ Yuborilmoqda...';
-  btn.disabled = true;
+  const oldText = btn?.textContent || '';
+  if (btn) {
+    btn.textContent = '⏳ Yuborilmoqda...';
+    btn.disabled = true;
+  }
+
+  const payload = {
+    customer_name: name,
+    customer_phone: phoneNormalized,
+    table_number: tableNo,
+    note: note || null,
+    payment_type: paymentType,
+    items: cart.map((i) => ({ product_id: i.id, quantity: i.qty })),
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
-    // 1. Orders jadvaliga yoz
-    const { data: order, error: orderErr } = await client.from('orders').insert([{
-      customer_name:  name,
-      customer_phone: phone,
-      total_price:    cartTotal(),
-      note:           note||null,
-      status:         'yangi'
-    }]).select().single();
+    const idempotencyKey =
+      (globalThis.crypto?.randomUUID?.() || `mb_${Date.now()}_${Math.random().toString(16).slice(2)}`);
 
-    if(orderErr) throw orderErr;
+    const res = await fetch(getOrderApiUrl(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
 
-    // 2. Order items jadvaliga yoz
-    const items = cart.map(i=>({
-      order_id: order.id,
-      menu_id:  i.id,
-      title:    i.title,
-      price:    i.price,
-      quantity: i.qty
-    }));
-    const { error: itemsErr } = await client.from('order_items').insert(items);
-    if(itemsErr) throw itemsErr;
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(String(json?.message || 'Xatolik yuz berdi'), 'error');
+      return;
+    }
 
-    // 3. Success
+    const orderId = Number(json?.orderId);
+    if (!orderId) {
+      showToast('Xatolik: orderId kelmadi', 'error');
+      return;
+    }
+
+    saveCustomerInfo({
+      name,
+      phone: formatPhoneUz(phoneNormalized),
+      tableNo: String(tableNo),
+      paymentType,
+    });
+
     cart = [];
     updateCartBadge();
     closeOrderModal();
-    document.getElementById('orderNum').textContent = '#'+order.id;
-    document.getElementById('successModal').classList.remove('hidden');
 
-  } catch(err) {
+    document.getElementById('orderNum').textContent = '#' + orderId;
+    document.getElementById('successModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+  } catch (err) {
     console.error(err);
-    showToast('❌ Xato: '+err.message);
+    if (err?.name === 'AbortError') {
+      showToast('Server javobi kechikyapti. Qayta urinib ko‘ring.', 'error');
+    } else {
+      showToast('Tarmoq xatosi. Internetni tekshiring.', 'error');
+    }
   } finally {
-    btn.textContent = '✅ Buyurtmani tasdiqlash';
-    btn.disabled = false;
+    clearTimeout(timeout);
+    if (btn) {
+      btn.textContent = oldText || '✅ Buyurtmani tasdiqlash';
+      btn.disabled = false;
+    }
   }
 }
 
@@ -543,14 +834,38 @@ function closeSuccess() {
 
 // ─── HELPERS ───────────────────────────────────────
 function fmt(p) { return new Intl.NumberFormat('uz-UZ').format(p)+" so'm"; }
-function showToast(msg) {
+let toastTimer = null;
+function showToast(msg, type = 'info') {
   const t = document.getElementById('toast');
-  document.getElementById('toastMsg').textContent = msg;
-  t.style.opacity='1';
-  setTimeout(()=>{ t.style.opacity='0'; },2500);
+  const box = document.getElementById('toastBox');
+  const icon = document.getElementById('toastIcon');
+  const text = document.getElementById('toastMsg');
+  if (!t || !box || !icon || !text) return;
+
+  const types = {
+    success: { cls: 'bg-emerald-600', icon: '✅' },
+    error: { cls: 'bg-red-600', icon: '❌' },
+    warn: { cls: 'bg-yellow-600', icon: '⚠️' },
+    info: { cls: 'bg-orange-600', icon: 'ℹ️' },
+  };
+  const conf = types[type] || types.info;
+
+  box.className = `${conf.cls} text-white px-5 py-3 rounded-2xl shadow-lg text-sm font-medium flex items-center gap-2`;
+  icon.textContent = conf.icon;
+  text.textContent = msg;
+
+  t.style.opacity = '1';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2600);
 }
 
-loadProducts();
+async function initApp() {
+  await ensureSupabaseConfig();
+  await loadProducts();
+}
+
+setupOrderFormEvents();
+initApp();
 </script>
 </body>
 </html>
