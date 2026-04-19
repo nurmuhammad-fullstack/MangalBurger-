@@ -2,6 +2,9 @@ require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
 const { createClient } = require('@supabase/supabase-js');
 const http = require('http');
+const https = require('https');
+const path = require('path');
+const crypto = require('crypto');
 
 // ─── ENV ───────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -10,6 +13,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 const WEBAPP_URL = process.env.WEBAPP_URL;
 const PORT = Number(process.env.PORT || 3000);
+const MENU_IMAGES_BUCKET = process.env.MENU_IMAGES_BUCKET || 'menu-images';
 
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN berilmagan');
 if (!ADMIN_ID) throw new Error('ADMIN_ID berilmagan');
@@ -87,6 +91,100 @@ function formatPaymentType(value) {
   if (v === 'cash') return 'Naqd';
   if (v === 'card') return 'Karta';
   return value || '-';
+}
+
+function safeId(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+}
+
+function randomId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function contentTypeFromExt(ext) {
+  const e = String(ext || '').toLowerCase();
+  if (e === '.png') return 'image/png';
+  if (e === '.webp') return 'image/webp';
+  if (e === '.gif') return 'image/gif';
+  return 'image/jpeg';
+}
+
+function downloadBuffer(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (res) => {
+        const status = res.statusCode || 0;
+        if (status >= 300 && status < 400 && res.headers.location) {
+          res.resume();
+          resolve(downloadBuffer(res.headers.location));
+          return;
+        }
+        if (status !== 200) {
+          res.resume();
+          reject(new Error(`Telegram file download failed: ${status}`));
+          return;
+        }
+
+        const chunks = [];
+        res.on('data', (d) => chunks.push(d));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+      })
+      .on('error', reject);
+  });
+}
+
+let bucketReady = false;
+async function ensureMenuImagesBucket() {
+  if (bucketReady) return;
+
+  try {
+    const { data: buckets, error } = await sb.storage.listBuckets();
+    if (error) throw error;
+
+    const found = (buckets || []).find((b) => b?.name === MENU_IMAGES_BUCKET || b?.id === MENU_IMAGES_BUCKET);
+    if (!found) {
+      const { error: createErr } = await sb.storage.createBucket(MENU_IMAGES_BUCKET, { public: true });
+      if (createErr && !String(createErr.message || '').toLowerCase().includes('exists')) {
+        throw createErr;
+      }
+    } else if (found.public === false) {
+      const { error: updErr } = await sb.storage.updateBucket(MENU_IMAGES_BUCKET, { public: true });
+      if (updErr) console.warn('bucket public update xato:', updErr);
+    }
+  } catch (e) {
+    console.warn('ensureMenuImagesBucket xato:', e?.message || e);
+  } finally {
+    bucketReady = true;
+  }
+}
+
+async function uploadTelegramPhotoToStorage(fileId, fileUniqueId) {
+  await ensureMenuImagesBucket();
+
+  const file = await bot.telegram.getFile(fileId);
+  const filePath = file?.file_path;
+  if (!filePath) throw new Error('Telegram file_path topilmadi');
+
+  const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+  const buffer = await downloadBuffer(url);
+
+  const ext = path.extname(filePath) || '.jpg';
+  const contentType = contentTypeFromExt(ext);
+
+  const namePart = safeId(fileUniqueId) || randomId();
+  const objectPath = `menu/${Date.now()}_${namePart}${ext.toLowerCase()}`;
+
+  const { error: uploadErr } = await sb.storage
+    .from(MENU_IMAGES_BUCKET)
+    .upload(objectPath, buffer, { contentType, upsert: false, cacheControl: '31536000' });
+
+  if (uploadErr) throw uploadErr;
+
+  const { data } = sb.storage.from(MENU_IMAGES_BUCKET).getPublicUrl(objectPath);
+  if (!data?.publicUrl) throw new Error('Public URL olinmadi');
+
+  return data.publicUrl;
 }
 
 function orderActionKeyboard(orderId) {
@@ -585,17 +683,29 @@ bot.on('photo', adminOnly, async (ctx) => {
       return ctx.reply("Avval 'Qo'shish' tugmasini bosing.");
     }
 
-    const photoId = ctx.message.photo?.[ctx.message.photo.length - 1]?.file_id;
+    const photo = ctx.message.photo?.[ctx.message.photo.length - 1];
+    const photoId = photo?.file_id;
+    const photoUniqueId = photo?.file_unique_id;
     if (!photoId) {
       return ctx.reply("❌ Rasm olinmadi. Qayta yuboring.");
     }
 
-    session.data.image_url = photoId;
-    session.step = 'wait_title';
+    await ctx.reply('⏳ Rasm saqlanmoqda...');
 
-    await ctx.reply("✏️ Endi taomning *nomini* kiriting:", {
-      parse_mode: 'Markdown'
-    });
+    try {
+      const publicUrl = await uploadTelegramPhotoToStorage(photoId, photoUniqueId);
+      session.data.image_url = publicUrl;
+      session.step = 'wait_title';
+
+      await ctx.reply("✅ Rasm saqlandi.\n\n✏️ Endi taomning *nomini* kiriting:", {
+        parse_mode: 'Markdown'
+      });
+    } catch (e) {
+      console.error('photo upload xato:', e);
+      session.data.image_url = null;
+      session.step = 'wait_photo';
+      await ctx.reply("❌ Rasmni saqlashda xato bo'ldi. Qayta yuboring.");
+    }
   } catch (error) {
     console.error('photo handler xato:', error);
     await ctx.reply('❌ Xato yuz berdi.');
