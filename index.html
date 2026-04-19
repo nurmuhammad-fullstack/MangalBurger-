@@ -583,7 +583,7 @@ function getTableNumberFromContext() {
   const fromTg = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
 
   const raw = fromUrl || fromTg || '';
-  const digits = String(raw).replace(/\\D/g, '');
+  const digits = String(raw).replace(/\D/g, '');
   if (!digits) return null;
 
   const n = Number(digits);
@@ -671,22 +671,24 @@ function clearOrderErrors() {
 }
 
 function normalizePhoneClient(raw) {
-  const digits = String(raw || '').replace(/\\D/g, '');
+  const digits = String(raw || '').replace(/\D/g, '');
   if (!digits) return null;
   if (digits.length === 12 && digits.startsWith('998')) return `+${digits}`;
+  if (digits.length === 13 && digits.startsWith('9980')) return `+998${digits.slice(4)}`;
+  if (digits.length === 10 && digits.startsWith('0')) return `+998${digits.slice(1)}`;
   if (digits.length === 9) return `+998${digits}`;
   return null;
 }
 
 function formatPhoneUz(normalized) {
-  const digits = String(normalized || '').replace(/\\D/g, '');
+  const digits = String(normalized || '').replace(/\D/g, '');
   if (digits.length !== 12 || !digits.startsWith('998')) return String(normalized || '');
   const d = digits.slice(3);
   return `+998 ${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 7)} ${d.slice(7, 9)}`;
 }
 
 function normalizeTableNoClient(raw) {
-  const digits = String(raw || '').replace(/\\D/g, '');
+  const digits = String(raw || '').replace(/\D/g, '');
   if (!digits) return null;
   const n = Number(digits);
   if (!Number.isFinite(n)) return null;
@@ -705,7 +707,7 @@ function setupOrderFormEvents() {
   if (tableInput) {
     tableInput.addEventListener('input', () => {
       clearFieldError('tableNo');
-      const digitsOnly = tableInput.value.replace(/\\D/g, '');
+      const digitsOnly = tableInput.value.replace(/\D/g, '');
       if (tableInput.value !== digitsOnly) tableInput.value = digitsOnly;
     });
   }
