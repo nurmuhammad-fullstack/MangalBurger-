@@ -7,6 +7,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Optional config (create `config.js` from `config.example.js`) -->
+  <script src="./config.js"></script>
   <style>
     *{font-family:'Poppins',sans-serif;}
     body{background:#fff8f0;}
@@ -70,6 +72,11 @@
   </div>
 
   <!-- CATEGORIES -->
+  <!-- CONFIG / DEMO BANNER -->
+  <div id="configBanner" class="px-5 mt-4 hidden">
+    <div id="configBannerBox" class="bg-yellow-50 border border-yellow-200 text-yellow-900 text-xs rounded-2xl p-3 leading-snug"></div>
+  </div>
+
   <div class="px-5 mt-5 mb-4">
     <div id="categories" class="flex gap-2 overflow-x-auto noscroll pb-1"></div>
   </div>
@@ -207,11 +214,56 @@
 
 <script>
 // ─── SUPABASE CONFIG ───────────────────────────────
-const SUPABASE_URL      = 'https://YOUR_PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY_HERE';
-
 const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function getClientConfig() {
+  const cfg = window.MANGAL_CONFIG || window.MB_CONFIG || {};
+  return {
+    supabaseUrl: (cfg.SUPABASE_URL || cfg.supabaseUrl || '').trim(),
+    supabaseAnonKey: (cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || '').trim(),
+  };
+}
+
+function isPlaceholderSupabaseConfig({ supabaseUrl, supabaseAnonKey }) {
+  if (!supabaseUrl || !supabaseAnonKey) return true;
+  return (
+    supabaseUrl.includes('YOUR_PROJECT') ||
+    supabaseAnonKey.includes('YOUR_ANON_KEY')
+  );
+}
+
+let sb = null;
+function getSupabaseClient() {
+  if (sb) return sb;
+
+  const cfg = getClientConfig();
+  if (isPlaceholderSupabaseConfig(cfg)) return null;
+
+  sb = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  return sb;
+}
+
+function setConfigBanner(message, kind = 'warn') {
+  const wrapper = document.getElementById('configBanner');
+  const box = document.getElementById('configBannerBox');
+  if (!wrapper || !box) return;
+
+  wrapper.classList.remove('hidden');
+  box.textContent = message;
+
+  box.className =
+    'text-xs rounded-2xl p-3 leading-snug border ' +
+    (kind === 'error'
+      ? 'bg-red-50 border-red-200 text-red-900'
+      : kind === 'ok'
+        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+        : 'bg-yellow-50 border-yellow-200 text-yellow-900');
+}
+
+function hideConfigBanner() {
+  const wrapper = document.getElementById('configBanner');
+  if (wrapper) wrapper.classList.add('hidden');
+}
 
 // ─── STATE ─────────────────────────────────────────
 let allProducts = [], filteredProducts = [], activeCategory = 'Barchasi';
@@ -231,11 +283,31 @@ const demo = [
 // ─── LOAD PRODUCTS ─────────────────────────────────
 async function loadProducts() {
   showSkeletons();
-  try {
-    const { data, error } = await sb.from('menu').select('*').eq('is_available',true).order('created_at',{ascending:false});
-    if(error) throw error;
-    allProducts = data?.length ? data : demo;
-  } catch { allProducts = demo; }
+  const client = getSupabaseClient();
+
+  if (!client) {
+    allProducts = demo;
+    setConfigBanner(
+      "⚠️ Demo rejim: Supabase sozlanmagan. `config.js` faylida `SUPABASE_URL` va `SUPABASE_ANON_KEY` ni kiriting.",
+      'warn'
+    );
+  } else {
+    hideConfigBanner();
+    try {
+      const { data, error } = await client
+        .from('menu')
+        .select('*')
+        .eq('is_available', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      allProducts = data || [];
+    } catch (err) {
+      console.error(err);
+      allProducts = [];
+      setConfigBanner(`❌ Menyuni yuklashda xato: ${err?.message || 'unknown'}`, 'error');
+    }
+  }
   filteredProducts = [...allProducts];
   renderCategories();
   renderProducts(filteredProducts);
@@ -250,7 +322,7 @@ function showSkeletons() {
 }
 
 function renderCategories() {
-  const cats = ['Barchasi',...new Set(allProducts.map(p=>p.category))];
+  const cats = ['Barchasi', ...new Set(allProducts.map(p => p.category).filter(Boolean))];
   document.getElementById('categories').innerHTML = cats.map(c=>`
     <button onclick="selectCategory('${c}')" class="whitespace-nowrap px-4 py-2 rounded-2xl text-sm font-medium transition-all duration-200 border border-transparent ${c===activeCategory?'cat-active shadow-md':'cat-inactive border-gray-100 shadow-sm'}">${c}</button>
   `).join('');
@@ -407,6 +479,12 @@ function closeOrderModal() {
 
 // ─── SUBMIT ORDER ──────────────────────────────────
 async function submitOrder() {
+  const client = getSupabaseClient();
+  if (!client) {
+    showToast('❌ Supabase sozlanmagan (demo rejim).');
+    return;
+  }
+
   const name  = document.getElementById('custName').value.trim();
   const phone = document.getElementById('custPhone').value.trim();
   const note  = document.getElementById('custNote').value.trim();
@@ -421,7 +499,7 @@ async function submitOrder() {
 
   try {
     // 1. Orders jadvaliga yoz
-    const { data: order, error: orderErr } = await sb.from('orders').insert([{
+    const { data: order, error: orderErr } = await client.from('orders').insert([{
       customer_name:  name,
       customer_phone: phone,
       total_price:    cartTotal(),
@@ -439,7 +517,7 @@ async function submitOrder() {
       price:    i.price,
       quantity: i.qty
     }));
-    const { error: itemsErr } = await sb.from('order_items').insert(items);
+    const { error: itemsErr } = await client.from('order_items').insert(items);
     if(itemsErr) throw itemsErr;
 
     // 3. Success
