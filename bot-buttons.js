@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
 const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const path = require('path');
@@ -10,7 +11,7 @@ const crypto = require('crypto');
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const WEBAPP_URL = process.env.WEBAPP_URL;
 const PORT = Number(process.env.PORT || 3000);
 const MENU_IMAGES_BUCKET = process.env.MENU_IMAGES_BUCKET || 'menu-images';
@@ -21,15 +22,79 @@ if (!SUPABASE_URL) throw new Error('SUPABASE_URL berilmagan');
 if (!SUPABASE_SERVICE_KEY) throw new Error('SUPABASE_SERVICE_KEY berilmagan');
 if (!WEBAPP_URL) throw new Error('WEBAPP_URL berilmagan');
 
+const orderApi = require('./api/order');
+const configApi = require('./api/config');
+
 // ─── HTTP SERVER ──────────────────────────────────
-http
-  .createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('🍔 Mangal Burger Bot ishlayapti!');
-  })
-  .listen(PORT, () => {
-    console.log(`🌐 Server ${PORT}-portda ishlamoqda`);
-  });
+async function readFileSafe(filePath) {
+  try {
+    return await fs.promises.readFile(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function send(res, status, headers, body) {
+  res.statusCode = status;
+  for (const [k, v] of Object.entries(headers || {})) res.setHeader(k, v);
+  if (body && res.req?.method !== 'HEAD') res.end(body);
+  else res.end();
+}
+
+http.createServer(async (req, res) => {
+  try {
+    const host = req.headers.host || `localhost:${PORT}`;
+    const url = new URL(req.url || '/', `http://${host}`);
+    const pathname = url.pathname;
+
+    if (pathname === '/api/order') return orderApi(req, res);
+    if (pathname === '/api/config') return configApi(req, res);
+
+    if (pathname === '/health' || pathname === '/healthz') {
+      send(res, 200, { 'Content-Type': 'text/plain; charset=utf-8' }, 'ok');
+      return;
+    }
+
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      send(res, 405, { 'Content-Type': 'text/plain; charset=utf-8' }, 'Method Not Allowed');
+      return;
+    }
+
+    if (pathname === '/' || pathname === '/index.html') {
+      const html = await readFileSafe(path.join(__dirname, 'index.html'));
+      if (!html) {
+        send(res, 404, { 'Content-Type': 'text/plain; charset=utf-8' }, 'index.html not found');
+        return;
+      }
+      send(res, 200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }, html);
+      return;
+    }
+
+    if (pathname === '/config.js') {
+      const js =
+        (await readFileSafe(path.join(__dirname, 'config.js'))) ||
+        (await readFileSafe(path.join(__dirname, 'config.example.js')));
+      if (!js) {
+        send(res, 404, { 'Content-Type': 'text/plain; charset=utf-8' }, 'config.js not found');
+        return;
+      }
+      send(
+        res,
+        200,
+        { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' },
+        js
+      );
+      return;
+    }
+
+    send(res, 404, { 'Content-Type': 'text/plain; charset=utf-8' }, 'Not found');
+  } catch (err) {
+    console.error('HTTP server xato:', err);
+    send(res, 500, { 'Content-Type': 'text/plain; charset=utf-8' }, 'Internal Server Error');
+  }
+}).listen(PORT, () => {
+  console.log(`🌐 Server ${PORT}-portda ishlamoqda`);
+});
 
 // ─── CLIENTS ──────────────────────────────────────
 const bot = new Telegraf(BOT_TOKEN);
@@ -55,6 +120,13 @@ const STATUS_EMOJI = {
 };
 
 const STATUS_LIST = Object.keys(STATUS_EMOJI);
+const ORDER_STATUS_MAP = {
+  yangi: 'new',
+  tayyorlanmoqda: 'preparing',
+  yetkazilmoqda: 'delivering',
+  yetkazildi: 'delivered',
+  bekor: 'cancelled',
+};
 
 // ─── SESSION ──────────────────────────────────────
 const sessions = {};
@@ -190,7 +262,7 @@ async function uploadTelegramPhotoToStorage(fileId, fileUniqueId) {
 function orderActionKeyboard(orderId) {
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback('🟡 Tayyorlanmoqda', `status_${orderId}_tayyorlanmoqda`),
+      Markup.button.callback('✅ Qabul qilish', `status_${orderId}_tayyorlanmoqda`),
       Markup.button.callback('❌ Bekor', `status_${orderId}_bekor`)
     ],
     [
@@ -365,9 +437,13 @@ bot.action(/^status_(\d+)_(.+)$/, adminOnly, async (ctx) => {
       return ctx.answerCbQuery("❌ Noma'lum status");
     }
 
+    const updatePayload = { status: newStatus };
+    const orderStatus = ORDER_STATUS_MAP[newStatus];
+    if (orderStatus) updatePayload.order_status = orderStatus;
+
     const { error } = await sb
       .from('orders')
-      .update({ status: newStatus })
+      .update(updatePayload)
       .eq('id', orderId);
 
     if (error) {
@@ -375,7 +451,11 @@ bot.action(/^status_(\d+)_(.+)$/, adminOnly, async (ctx) => {
       return ctx.answerCbQuery('❌ Yangilashda xato');
     }
 
-    await ctx.answerCbQuery(`${STATUS_EMOJI[newStatus]} Yangilandi`);
+    await ctx.answerCbQuery(
+      newStatus === 'tayyorlanmoqda'
+        ? '🟡 Tayyorlash boshlandi'
+        : `${STATUS_EMOJI[newStatus]} Yangilandi`
+    );
 
     const msg = await buildOrderMessage(orderId);
     if (msg) {

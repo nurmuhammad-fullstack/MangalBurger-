@@ -22,7 +22,7 @@ function setCors(res, origin) {
   if (!origin) return;
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key');
   res.setHeader('Access-Control-Max-Age', '86400');
 }
@@ -79,7 +79,11 @@ let cachedSb = null;
 function getSupabaseAdmin() {
   if (cachedSb) return cachedSb;
   const url = (process.env.SUPABASE_URL || '').trim();
-  const serviceKey = (process.env.SUPABASE_SERVICE_KEY || '').trim();
+  const serviceKey = (
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ''
+  ).trim();
   if (!url || !serviceKey) return null;
 
   cachedSb = createClient(url, serviceKey, {
@@ -116,8 +120,7 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // Avoid noisy console errors if someone opens the endpoint in the browser
-  if (req.method === 'GET' || req.method === 'HEAD') {
+  if (req.method === 'GET') {
     sendJson(res, 200, { ok: true, message: 'Use POST to create an order' }, origin);
     return;
   }

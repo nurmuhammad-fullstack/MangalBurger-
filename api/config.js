@@ -47,8 +47,13 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
-  const supabaseAnonKey = (process.env.SUPABASE_ANON_KEY || '').trim();
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const supabaseAnonKey = (
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_PUBLIC_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    ''
+  ).trim();
 
   if (!supabaseUrl || !supabaseAnonKey) {
     sendJson(res, 500, { message: 'Supabase env vars are missing' }, origin);
@@ -62,4 +67,3 @@ module.exports = async (req, res) => {
     origin
   );
 };
-
