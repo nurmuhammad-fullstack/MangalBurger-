@@ -282,15 +282,27 @@ async function uploadTelegramPhotoToStorage(fileId, fileUniqueId) {
   return data.publicUrl;
 }
 
-function orderActionKeyboard(orderId) {
+function orderActionKeyboard(orderId, status = 'yangi') {
+  if (status === 'tayyorlanmoqda') {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.callback('🔵 Yetkazilmoqda', `status_${orderId}_yetkazilmoqda`),
+        Markup.button.callback('✅ Yetkazildi', `status_${orderId}_yetkazildi`)
+      ]
+    ]).reply_markup;
+  }
+  if (status === 'yetkazilmoqda') {
+    return Markup.inlineKeyboard([
+      [Markup.button.callback('✅ Yetkazildi', `status_${orderId}_yetkazildi`)]
+    ]).reply_markup;
+  }
+  if (status === 'yetkazildi' || status === 'bekor') {
+    return Markup.inlineKeyboard([]).reply_markup;
+  }
   return Markup.inlineKeyboard([
     [
       Markup.button.callback('✅ Qabul qilish', `status_${orderId}_tayyorlanmoqda`),
       Markup.button.callback('❌ Bekor', `status_${orderId}_bekor`)
-    ],
-    [
-      Markup.button.callback('🔵 Yetkazilmoqda', `status_${orderId}_yetkazilmoqda`),
-      Markup.button.callback('✅ Yetkazildi', `status_${orderId}_yetkazildi`)
     ]
   ]).reply_markup;
 }
@@ -487,7 +499,7 @@ bot.action(/^status_(\d+)_(.+)$/, adminOnly, async (ctx) => {
     if (msg) {
       await ctx.editMessageText(msg, {
         parse_mode: 'Markdown',
-        reply_markup: orderActionKeyboard(orderId)
+        reply_markup: orderActionKeyboard(orderId, newStatus)
       });
     }
   } catch (error) {
