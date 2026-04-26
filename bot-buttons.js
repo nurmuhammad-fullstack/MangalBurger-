@@ -10,6 +10,11 @@ const crypto = require('crypto');
 // ─── ENV ───────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
+const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID ? Number(process.env.GROUP_CHAT_ID) : null;
+
+function isGroupChat(id) {
+  return id && id < 0;
+}
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 function normalizeWebAppUrl(raw) {
@@ -432,7 +437,8 @@ function subscribeToOrders() {
           const msg = await buildOrderMessage(orderId);
           if (!msg) return;
 
-          await bot.telegram.sendMessage(ADMIN_ID, msg, {
+          const target = GROUP_CHAT_ID || ADMIN_ID;
+          await bot.telegram.sendMessage(target, msg, {
             parse_mode: 'Markdown',
             reply_markup: orderActionKeyboard(orderId)
           });
