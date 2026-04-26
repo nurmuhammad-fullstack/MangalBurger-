@@ -399,13 +399,15 @@ async function buildOrderMessage(orderId) {
 bot.start(adminOnly, async (ctx) => {
   clearSession(ctx.from.id);
 
+  const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
+
   await ctx.reply(
     '👋 Assalomu alaykum, Admin!\n\n🍔 *Mangal Burger Boshqaruv Paneliga xush kelibsiz!*',
     {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🌐 Menyuni ochish', web_app: { url: WEBAPP_URL } }],
+          ...(isGroup ? [] : [[{ text: '🌐 Menyuni ochish', web_app: { url: WEBAPP_URL } }]]),
           [
             { text: '📋 Buyurtmalar', callback_data: 'btn_orders' },
             { text: '📊 Statistika', callback_data: 'btn_stats' }
