@@ -10,6 +10,7 @@ const crypto = require('crypto');
 // ─── ENV ───────────────────────────────────────────
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = Number(process.env.ADMIN_ID);
+const ADMIN_IDS = [ADMIN_ID, 7651698827].filter(Boolean);
 const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID ? Number(process.env.GROUP_CHAT_ID) : null;
 
 function isGroupChat(id) {
@@ -167,7 +168,7 @@ function clearSession(userId) {
 
 // ─── HELPERS ──────────────────────────────────────
 async function adminOnly(ctx, next) {
-  if (ctx.from?.id !== ADMIN_ID) {
+  if (!ADMIN_IDS.includes(ctx.from?.id)) {
     return ctx.reply("❌ Ruxsat yo'q!");
   }
   return next();
